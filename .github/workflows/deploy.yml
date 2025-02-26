@@ -65,20 +65,14 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
         run: aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
 
-      - name: Generate Deployment Package
+      - name: Create Elastic Beanstalk Application
         run: |
-          zip -r deploy.zip . -x '*.git*'
-
-      - name: Deploy to Elastic Beanstalk
-        uses: einaregilsson/beanstalk-deploy@v20
-        with:
-          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          application_name: student-app
-          environment_name: student-env
-          version_label: v1-${{ github.sha }}
-          region: ${{ secrets.AWS_REGION }}
-          deployment_package: deploy.zip
+          eb init student-app --platform python-3.9 --region ${{ secrets.AWS_REGION }}
+          if ! eb status student-env 2>/dev/null; then
+            eb create student-env --instance-types t2.micro
+          else
+            eb deploy student-env
+          fi
 
       - name: Get Application URL
         id: get_url
@@ -98,7 +92,7 @@ jobs:
           echo "Lambda Get Students API: ${{ env.GET_STUDENTS_URL }}" >> deployment_status.md
 
       - name: Upload Status as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deployment-status
           path: deployment_status.md
