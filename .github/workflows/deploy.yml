@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Dependencies
+      - name: Install AWS CLI and Dependencies
         run: |
           pip install awscli
           pip install -r backend/lambda_functions/requirements.txt
