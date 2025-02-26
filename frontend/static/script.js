@@ -1,7 +1,7 @@
 // API Endpoints
 const API_ENDPOINTS = {
-    ADD_STUDENT: 'https://[YOUR_API_ID].execute-api.ap-south-1.amazonaws.com/prod/students',
-    GET_STUDENTS: 'https://[YOUR_API_ID].execute-api.ap-south-1.amazonaws.com/prod/students'
+    ADD_STUDENT: 'https://b31i1zxvcd.execute-api.ap-south-1.amazonaws.com/prod/students',
+    GET_STUDENTS: 'https://fabj02e95h.execute-api.ap-south-1.amazonaws.com/prod/students'
 };
 
 // Add Student Form Handler

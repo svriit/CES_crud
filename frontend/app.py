@@ -3,8 +3,8 @@ import requests
 
 app = Flask(__name__)
 
-ADD_STUDENT_URL = "https://your-lambda-url/add_student"
-GET_STUDENTS_URL = "https://your-lambda-url/get_students"
+ADD_STUDENT_URL = "https://b31i1zxvcd.execute-api.ap-south-1.amazonaws.com/prod/students"
+GET_STUDENTS_URL = "https://fabj02e95h.execute-api.ap-south-1.amazonaws.com/prod/students"
 
 @app.route("/")
 def index():
