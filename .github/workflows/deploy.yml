@@ -3,7 +3,7 @@ name: Deploy Student CRUD App
 on:
   push:
     branches:
-      - main  # Runs on every push to the main branch
+      - main
 
 jobs:
   deploy:
@@ -18,12 +18,9 @@ jobs:
           python-version: '3.9'
 
       - name: Install Dependencies
-        run: pip install -r backend/lambda_functions/requirements.txt
-
-      - name: Install EB CLI
         run: |
-          pip install awsebcli
           pip install awscli
+          pip install -r backend/lambda_functions/requirements.txt
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -32,25 +29,20 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Zip Lambda Functions
-        run: |
-          cd backend/lambda_functions
-          zip -r ../../lambda.zip .
-          cd ../../
-          ls -lh  # List files to verify zip
-
       - name: Deploy Lambda Functions
         env:
           LAMBDA_FUNCTION_ADD: ${{ secrets.LAMBDA_FUNCTION_ADD }}
           LAMBDA_FUNCTION_GET: ${{ secrets.LAMBDA_FUNCTION_GET }}
           LAMBDA_EXECUTION_ROLE: arn:aws:iam::135808949659:role/LambdaExecutionRole
         run: |
+          cd backend/lambda_functions
+          zip -r ../../lambda.zip .
+          cd ../../
+
           for function in $LAMBDA_FUNCTION_ADD $LAMBDA_FUNCTION_GET; do
             if aws lambda get-function --function-name $function; then
-              echo "Updating existing function $function"
               aws lambda update-function-code --function-name $function --zip-file fileb://lambda.zip
             else
-              echo "Creating new function $function"
               aws lambda create-function \
                 --function-name $function \
                 --runtime python3.9 \
@@ -60,74 +52,42 @@ jobs:
             fi
           done
 
-      - name: Deploy Flask Frontend to S3
+      - name: Deploy Frontend to S3
         env:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-        run: aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
-
-      - name: Prepare for Elastic Beanstalk
         run: |
-          # Create necessary directories
-          mkdir -p static templates
+          aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
           
-          # Copy static files and templates
-          cp -r frontend/static/* static/
-          cp -r frontend/templates/* templates/
-          
-          # Ensure all files are in the root directory
-          cp frontend/app.py application.py
-          
-          # Verify files
-          ls -la
+          # Set bucket for static website hosting
+          aws s3 website s3://$S3_BUCKET_NAME --index-document index.html
 
-      - name: Deploy to Elastic Beanstalk
+          # Make bucket public
+          aws s3api put-bucket-policy --bucket $S3_BUCKET_NAME --policy '{
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Sid": "PublicReadGetObject",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::'$S3_BUCKET_NAME'/*"
+              }
+            ]
+          }'
+
+      - name: Get Deployment URLs
+        id: get_urls
         run: |
-          eb init student-app \
-            --platform python-3.9 \
-            --region ${{ secrets.AWS_REGION }}
-
-          if ! aws elasticbeanstalk describe-environments \
-              --application-name student-app \
-              --environment-names student-env \
-              --query "Environments[0]" \
-              --output text 2>/dev/null; then
-            
-            echo "Creating new environment..."
-            eb create student-env \
-              --instance-type t2.micro \
-              --single \
-              --cname student-env \
-              --version-label v-${{ github.sha }} \
-              --platform "Python 3.9" \
-              -r ${{ secrets.AWS_REGION }}
-          else
-            echo "Deploying to existing environment..."
-            eb deploy student-env \
-              --version-label v-${{ github.sha }}
-          fi
-
-      - name: Wait for deployment
-        run: |
-          echo "Waiting for environment to be ready..."
-          sleep 60
-          eb status student-env
-
-      - name: Get Application URL
-        id: get_url
-        run: |
-          APP_URL=$(aws elasticbeanstalk describe-environments \
-            --environment-names student-env \
-            --query "Environments[0].CNAME" \
-            --output text)
-          echo "Application URL: http://$APP_URL"
-          echo "app_url=http://$APP_URL" >> $GITHUB_OUTPUT
+          echo "Frontend URL: http://${{ secrets.S3_BUCKET_NAME }}.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
+          echo "Add Student API: https://b31i1zxvcd.execute-api.ap-south-1.amazonaws.com/prod/students"
+          echo "Get Students API: https://fabj02e95h.execute-api.ap-south-1.amazonaws.com/prod/students"
 
       - name: Create Status File
         run: |
           echo "# Deployment Status" > deployment_status.md
-          echo "Flask App URL: http://${{ steps.get_url.outputs.app_url }}" >> deployment_status.md
-          echo "Lambda Add Student API: ${{ env.ADD_STUDENT_URL }}" >> deployment_status.md
-          echo "Lambda Get Students API: ${{ env.GET_STUDENTS_URL }}" >> deployment_status.md
+          echo "Frontend URL: http://${{ secrets.S3_BUCKET_NAME }}.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com" >> deployment_status.md
+          echo "Add Student API: https://b31i1zxvcd.execute-api.ap-south-1.amazonaws.com/prod/students" >> deployment_status.md
+          echo "Get Students API: https://fabj02e95h.execute-api.ap-south-1.amazonaws.com/prod/students" >> deployment_status.md
 
       - name: Upload Status as Artifact
         uses: actions/upload-artifact@v4
