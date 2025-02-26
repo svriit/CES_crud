@@ -3,7 +3,7 @@ name: Deploy Student CRUD App
 on:
   push:
     branches:
-      - main
+      - main  # Runs on every push to the main branch
 
 jobs:
   deploy:
@@ -17,34 +17,45 @@ jobs:
         with:
           python-version: '3.8'
 
+      - name: Install Dependencies
+        run: pip install -r backend/lambda_functions/requirements.txt
+
       - name: Install AWS CLI
         run: |
-          sudo apt update
-          sudo apt install -y awscli
+          pip install awscli --upgrade --user
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          aws --version  # Verify AWS CLI installation
 
-      - name: Create Lambda ZIP
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Zip Lambda Functions
         run: |
           cd backend/lambda_functions
-          zip -r ../../lambda.zip . 
-          cd ../..
+          zip -r ../../lambda.zip .
+          cd ../../
+          ls -lh  # List files to verify zip
 
       - name: Deploy Lambda Functions
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-south-1
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          LAMBDA_FUNCTION_ADD: ${{ secrets.LAMBDA_FUNCTION_ADD }}
+          LAMBDA_FUNCTION_GET: ${{ secrets.LAMBDA_FUNCTION_GET }}
         run: |
-          aws lambda create-function --function-name add_student_function \
-            --runtime python3.8 --role arn:aws:iam::135808949659:role/LambdaExecutionRole \
-            --handler add_student.lambda_handler --timeout 10 --memory-size 128 \
-            --zip-file fileb://lambda.zip --region ap-south-1 || \
-          aws lambda update-function-code --function-name add_student_function --zip-file fileb://lambda.zip --region ap-south-1
+          aws lambda update-function-code --function-name $LAMBDA_FUNCTION_ADD --zip-file fileb://lambda.zip
+          aws lambda update-function-code --function-name $LAMBDA_FUNCTION_GET --zip-file fileb://lambda.zip
 
-          aws lambda create-function --function-name get_students_function \
-            --runtime python3.8 --role arn:aws:iam::135808949659:role/LambdaExecutionRole \
-            --handler get_students.lambda_handler --timeout 10 --memory-size 128 \
-            --zip-file fileb://lambda.zip --region ap-south-1 || \
-          aws lambda update-function-code --function-name get_students_function --zip-file fileb://lambda.zip --region ap-south-1
+      - name: Deploy Flask Frontend to S3
+        env:
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        run: aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
 
-      - name: Deploy Frontend to S3
-        run: aws s3 sync frontend/ s3://testingcrud/
+      - name: Invalidate CloudFront Cache (Optional)
+        env:
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*" || echo "Skipping CloudFront invalidation"
