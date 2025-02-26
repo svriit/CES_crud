@@ -65,14 +65,52 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
         run: aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
 
-      - name: Create Elastic Beanstalk Application
+      - name: Prepare for Elastic Beanstalk
         run: |
-          eb init student-app --platform python-3.9 --region ${{ secrets.AWS_REGION }}
-          if ! eb status student-env 2>/dev/null; then
-            eb create student-env --instance-types t2.micro
+          # Create necessary directories
+          mkdir -p static templates
+          
+          # Copy static files and templates
+          cp -r frontend/static/* static/
+          cp -r frontend/templates/* templates/
+          
+          # Ensure all files are in the root directory
+          cp frontend/app.py application.py
+          
+          # Verify files
+          ls -la
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          eb init student-app \
+            --platform python-3.9 \
+            --region ${{ secrets.AWS_REGION }}
+
+          if ! aws elasticbeanstalk describe-environments \
+              --application-name student-app \
+              --environment-names student-env \
+              --query "Environments[0]" \
+              --output text 2>/dev/null; then
+            
+            echo "Creating new environment..."
+            eb create student-env \
+              --instance-type t2.micro \
+              --single \
+              --cname student-env \
+              --version-label v-${{ github.sha }} \
+              --platform "Python 3.9" \
+              -r ${{ secrets.AWS_REGION }}
           else
-            eb deploy student-env
+            echo "Deploying to existing environment..."
+            eb deploy student-env \
+              --version-label v-${{ github.sha }}
           fi
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for environment to be ready..."
+          sleep 60
+          eb status student-env
 
       - name: Get Application URL
         id: get_url
