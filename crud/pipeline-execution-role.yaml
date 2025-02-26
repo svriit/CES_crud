@@ -26,6 +26,7 @@ Resources:
                   - s3:DeleteBucket
                   - s3:PutBucketPolicy
                   - s3:GetBucketPolicy
+                  - s3:HeadBucket
                   - s3:PutObject
                   - s3:GetObject
                   - s3:DeleteObject
