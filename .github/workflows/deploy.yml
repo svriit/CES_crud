@@ -20,6 +20,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Create ZIP Archive for Lambda
+        run: |
+          mkdir -p lambda_build
+          cp -r backend/lambda_functions/* lambda_build/
+          cd lambda_build
+          zip -r lambda.zip .
+          mv lambda.zip ../
+          cd ..
+
+      - name: Debug file structure (Check if ZIP exists)
+        run: ls -lah lambda.zip
+
       - name: Deploy to AWS Lambda
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
