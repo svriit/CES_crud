@@ -17,25 +17,16 @@ jobs:
         with:
           python-version: '3.8'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Create ZIP Archive for Lambda
+      - name: Install AWS CLI
         run: |
-          mkdir -p lambda_build
-          cp -r backend/lambda_functions/* lambda_build/
-          cd lambda_build
-          zip -r lambda.zip .
-          mv lambda.zip ../
-          cd ..
+          sudo apt update
+          sudo apt install -y awscli
 
-      - name: Configure AWS Credentials
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ap-south-1
+      - name: Create Lambda ZIP
         run: |
-          aws configure set region $AWS_REGION
+          cd backend/lambda_functions
+          zip -r ../../lambda.zip . 
+          cd ../..
 
       - name: Deploy Lambda Functions
         env:
@@ -43,37 +34,17 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-south-1
         run: |
-          # Create or update add_student function
-          if ! aws lambda get-function --function-name add_student --region $AWS_REGION &>/dev/null; then
-            aws lambda create-function \
-              --function-name add_student \
-              --runtime python3.8 \
-              --handler add_student.lambda_handler \
-              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-basic-execution \
-              --zip-file fileb://lambda.zip \
-              --region $AWS_REGION
-          else
-            aws lambda update-function-code \
-              --function-name add_student \
-              --zip-file fileb://lambda.zip \
-              --region $AWS_REGION
-          fi
+          aws lambda create-function --function-name add_student_function \
+            --runtime python3.8 --role arn:aws:iam::135808949659:role/LambdaExecutionRole \
+            --handler add_student.lambda_handler --timeout 10 --memory-size 128 \
+            --zip-file fileb://lambda.zip --region ap-south-1 || \
+          aws lambda update-function-code --function-name add_student_function --zip-file fileb://lambda.zip --region ap-south-1
 
-          # Create or update get_students function
-          if ! aws lambda get-function --function-name get_students --region $AWS_REGION &>/dev/null; then
-            aws lambda create-function \
-              --function-name get_students \
-              --runtime python3.8 \
-              --handler get_students.lambda_handler \
-              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-basic-execution \
-              --zip-file fileb://lambda.zip \
-              --region $AWS_REGION
-          else
-            aws lambda update-function-code \
-              --function-name get_students \
-              --zip-file fileb://lambda.zip \
-              --region $AWS_REGION
-          fi
+          aws lambda create-function --function-name get_students_function \
+            --runtime python3.8 --role arn:aws:iam::135808949659:role/LambdaExecutionRole \
+            --handler get_students.lambda_handler --timeout 10 --memory-size 128 \
+            --zip-file fileb://lambda.zip --region ap-south-1 || \
+          aws lambda update-function-code --function-name get_students_function --zip-file fileb://lambda.zip --region ap-south-1
 
-      - name: Deploy Flask App to S3
+      - name: Deploy Frontend to S3
         run: aws s3 sync frontend/ s3://testingcrud/
