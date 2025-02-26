@@ -9,12 +9,22 @@ def lambda_handler(event, context):
         response = table.scan()
         return {
             "statusCode": 200,
-            "body": json.dumps(response["Items"]),
-            "headers": {"Content-Type": "application/json"}
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "OPTIONS,GET"
+            },
+            "body": json.dumps(response["Items"])
         }
     except Exception as e:
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": str(e)}),
-            "headers": {"Content-Type": "application/json"}
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "OPTIONS,GET"
+            },
+            "body": json.dumps({"error": str(e)})
         }

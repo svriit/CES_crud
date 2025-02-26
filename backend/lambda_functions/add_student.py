@@ -7,9 +7,25 @@ table = dynamodb.Table("Students")
 
 def lambda_handler(event, context):
     try:
-        body = json.loads(event["body"])
+        # Handle API Gateway event
+        if 'body' in event:
+            if isinstance(event['body'], str):
+                body = json.loads(event['body'])
+            else:
+                body = event['body']
+        else:
+            return {
+                "statusCode": 400,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Access-Control-Allow-Methods": "OPTIONS,POST"
+                },
+                "body": json.dumps({"error": "No body provided"})
+            }
+
         student_id = str(uuid.uuid4())
-        
         item = {
             "id": student_id,
             "name": body["name"],
@@ -19,12 +35,22 @@ def lambda_handler(event, context):
         table.put_item(Item=item)
         return {
             "statusCode": 200,
-            "body": json.dumps({"message": "Student added successfully", "id": student_id}),
-            "headers": {"Content-Type": "application/json"}
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "OPTIONS,POST"
+            },
+            "body": json.dumps({"message": "Student added successfully", "id": student_id})
         }
     except Exception as e:
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": str(e)}),
-            "headers": {"Content-Type": "application/json"}
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "OPTIONS,POST"
+            },
+            "body": json.dumps({"error": str(e)})
         }

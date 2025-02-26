@@ -1,33 +1,85 @@
-document.getElementById("studentForm").addEventListener("submit", function(event) {
+// API Endpoints
+const API_ENDPOINTS = {
+    ADD_STUDENT: 'https://[YOUR_API_ID].execute-api.ap-south-1.amazonaws.com/prod/students',
+    GET_STUDENTS: 'https://[YOUR_API_ID].execute-api.ap-south-1.amazonaws.com/prod/students'
+};
+
+// Add Student Form Handler
+document.getElementById("studentForm").addEventListener("submit", async function(event) {
     event.preventDefault();
+    const submitButton = this.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
 
-    let name = document.getElementById("name").value;
-    let email = document.getElementById("email").value;
+    try {
+        const studentData = {
+            name: document.getElementById("name").value,
+            email: document.getElementById("email").value
+        };
 
-    fetch("/add_student", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email })
-    })
-    .then(response => response.json())
-    .then(data => {
-        alert(data.message);
-        fetchStudents();
-    })
-    .catch(error => console.error("Error:", error));
+        const response = await fetch(API_ENDPOINTS.ADD_STUDENT, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(studentData)
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+            alert("Student added successfully!");
+            this.reset();
+            fetchStudents();
+        } else {
+            throw new Error(result.error || 'Failed to add student');
+        }
+    } catch (error) {
+        console.error("Error adding student:", error);
+        alert(`Failed to add student: ${error.message}`);
+    } finally {
+        submitButton.disabled = false;
+    }
 });
 
-function fetchStudents() {
-    fetch("/get_students")
-    .then(response => response.json())
-    .then(data => {
-        let studentList = document.getElementById("studentList");
-        studentList.innerHTML = "";
-        data.forEach(student => {
-            let li = document.createElement("li");
-            li.textContent = `${student.name} - ${student.email}`;
-            studentList.appendChild(li);
+// Fetch Students Function
+async function fetchStudents() {
+    const studentList = document.getElementById("studentList");
+    studentList.innerHTML = '<li>Loading students...</li>';
+
+    try {
+        const response = await fetch(API_ENDPOINTS.GET_STUDENTS, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json"
+            }
         });
-    })
-    .catch(error => console.error("Error:", error));
+
+        const students = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(students.error || 'Failed to fetch students');
+        }
+
+        if (students.length === 0) {
+            studentList.innerHTML = '<li>No students found</li>';
+            return;
+        }
+
+        studentList.innerHTML = students
+            .map(student => `
+                <li class="student-item">
+                    <div class="student-info">
+                        <strong>${student.name}</strong>
+                        <span>${student.email}</span>
+                    </div>
+                </li>
+            `)
+            .join('');
+    } catch (error) {
+        console.error("Error fetching students:", error);
+        studentList.innerHTML = `<li class="error">Error loading students: ${error.message}</li>`;
+    }
 }
+
+// Initial load of students
+document.addEventListener('DOMContentLoaded', fetchStudents);

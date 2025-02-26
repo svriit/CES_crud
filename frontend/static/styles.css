@@ -16,3 +16,30 @@ button {
     padding: 10px 20px;
     cursor: pointer;
 }
+
+.student-item {
+    list-style: none;
+    padding: 10px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+}
+
+.student-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+}
+
+.error {
+    color: red;
+    font-style: italic;
+}
+
+#studentList {
+    max-width: 600px;
+    margin: 20px auto;
+    padding: 0;
+}
