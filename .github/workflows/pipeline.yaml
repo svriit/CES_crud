@@ -16,7 +16,7 @@ env:
   TESTING_STACK_NAME: crud-dev
   TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::135808949659:role/aws-sam-cli-managed-dev-pipel-PipelineExecutionRole-IA7Ho0ZWslW0
   TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::135808949659:role/aws-sam-cli-managed-dev-p-CloudFormationExecutionRo-L4HqaRohLr6P
-  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-dev-pipeline-r-artifactsbucket-ce0mwvfgiqlu
+  TESTING_ARTIFACTS_BUCKET: testingcrud
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${TESTING_IMAGE_REPOSITORY}" to
   # testing "sam package" and "sam deploy" commands.
@@ -25,7 +25,7 @@ env:
   PROD_STACK_NAME: crud-prod
   PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::135808949659:role/aws-sam-cli-managed-prod-pipe-PipelineExecutionRole-yGJdXnqpuGyU
   PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::135808949659:role/aws-sam-cli-managed-prod--CloudFormationExecutionRo-MsyzdKUr6y2Z
-  PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-prod-pipeline--artifactsbucket-mcfyiejqhqog
+  PROD_ARTIFACTS_BUCKET: testingcrud
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${PROD_IMAGE_REPOSITORY}" to
   # prod "sam package" and "sam deploy" commands.
@@ -130,6 +130,11 @@ jobs:
           role-duration-seconds: 3600
           role-skip-session-tagging: true
 
+      - name: Create testing artifacts bucket if not exists
+        run: |
+          aws s3api head-bucket --bucket ${TESTING_ARTIFACTS_BUCKET} 2>/dev/null || \
+          aws s3 mb s3://${TESTING_ARTIFACTS_BUCKET} --region ${TESTING_REGION}
+
       - name: Upload artifacts to testing artifact buckets
         run: |
           sam package \
@@ -152,6 +157,11 @@ jobs:
           role-session-name: prod-packaging
           role-duration-seconds: 3600
           role-skip-session-tagging: true
+
+      - name: Create production artifacts bucket if not exists
+        run: |
+          aws s3api head-bucket --bucket ${PROD_ARTIFACTS_BUCKET} 2>/dev/null || \
+          aws s3 mb s3://${PROD_ARTIFACTS_BUCKET} --region ${PROD_REGION}
 
       - name: Upload artifacts to production artifact buckets
         run: |
