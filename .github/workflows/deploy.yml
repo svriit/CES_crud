@@ -21,21 +21,37 @@ jobs:
 
       - name: Deploy Lambda Functions
         run: |
-          # Zip and deploy add_student function
-          cd backend/lambda_functions
-          zip -r ../../add_student.zip add_student.py
-          cd ../..
-          aws lambda update-function-code \
-            --function-name add_student \
-            --zip-file fileb://add_student.zip
+          # Function deployment helper
+          deploy_function() {
+            local function_name=$1
+            local handler=$2
+            local zip_file=$3
 
-          # Zip and deploy get_students function
+            if aws lambda get-function --function-name $function_name 2>/dev/null; then
+              echo "Updating existing function: $function_name"
+              aws lambda update-function-code \
+                --function-name $function_name \
+                --zip-file fileb://$zip_file
+            else
+              echo "Creating new function: $function_name"
+              aws lambda create-function \
+                --function-name $function_name \
+                --runtime python3.9 \
+                --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/LambdaExecutionRole \
+                --handler $handler \
+                --zip-file fileb://$zip_file
+            fi
+          }
+
+          # Create deployment packages
           cd backend/lambda_functions
-          zip -r ../../get_students.zip get_students.py
+          zip -r ../../add_student.zip add_student.py requirements.txt
+          zip -r ../../get_students.zip get_students.py requirements.txt
           cd ../..
-          aws lambda update-function-code \
-            --function-name get_students \
-            --zip-file fileb://get_students.zip
+
+          # Deploy functions
+          deploy_function "add_student" "add_student.lambda_handler" "add_student.zip"
+          deploy_function "get_students" "get_students.lambda_handler" "get_students.zip"
 
       - name: Deploy Static Website
         run: |
