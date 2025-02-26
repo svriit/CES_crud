@@ -132,8 +132,8 @@ jobs:
 
       - name: Create testing artifacts bucket if not exists
         run: |
-          aws s3api head-bucket --bucket ${TESTING_ARTIFACTS_BUCKET} 2>/dev/null || \
-          aws s3 mb s3://${TESTING_ARTIFACTS_BUCKET} --region ${TESTING_REGION}
+          # Skip bucket creation and assume it exists
+          aws s3api head-bucket --bucket ${TESTING_ARTIFACTS_BUCKET} 2>/dev/null
 
       - name: Upload artifacts to testing artifact buckets
         run: |
