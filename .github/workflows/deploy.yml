@@ -3,17 +3,17 @@ name: Deploy Student CRUD App
 on:
   push:
     branches:
-      - main  # Runs on every push to the main branch
+      - main  # Trigger deployment on push to main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: '3.8'
 
@@ -22,8 +22,7 @@ jobs:
 
       - name: Install AWS CLI
         run: |
-          pip install awscli --upgrade --user
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          sudo apt update && sudo apt install -y awscli
           aws --version  # Verify AWS CLI installation
 
       - name: Configure AWS Credentials
@@ -36,9 +35,10 @@ jobs:
       - name: Zip Lambda Functions
         run: |
           cd backend/lambda_functions
-          zip -r ../../lambda.zip .
+          pip install -r requirements.txt -t .  # Install dependencies inside the package
+          zip -r ../../lambda.zip .  # Package the Lambda function
           cd ../../
-          ls -lh  # List files to verify zip
+          ls -lh lambda.zip  # Verify zip file exists
 
       - name: Deploy Lambda Functions
         env:
@@ -46,16 +46,44 @@ jobs:
           LAMBDA_FUNCTION_ADD: ${{ secrets.LAMBDA_FUNCTION_ADD }}
           LAMBDA_FUNCTION_GET: ${{ secrets.LAMBDA_FUNCTION_GET }}
         run: |
-          aws lambda update-function-code --function-name $LAMBDA_FUNCTION_ADD --zip-file fileb://lambda.zip
-          aws lambda update-function-code --function-name $LAMBDA_FUNCTION_GET --zip-file fileb://lambda.zip
+          echo "Deploying Lambda function: $LAMBDA_FUNCTION_ADD"
+          if aws lambda get-function --function-name $LAMBDA_FUNCTION_ADD; then
+            aws lambda update-function-code --function-name $LAMBDA_FUNCTION_ADD --zip-file fileb://lambda.zip
+          else
+            echo "Function $LAMBDA_FUNCTION_ADD not found, creating it..."
+            aws lambda create-function --function-name $LAMBDA_FUNCTION_ADD \
+              --runtime python3.8 \
+              --role arn:aws:iam::135808949659:role/LambdaExecutionRole \
+              --handler add_student.lambda_handler \
+              --zip-file fileb://lambda.zip
+          fi
+
+          echo "Deploying Lambda function: $LAMBDA_FUNCTION_GET"
+          if aws lambda get-function --function-name $LAMBDA_FUNCTION_GET; then
+            aws lambda update-function-code --function-name $LAMBDA_FUNCTION_GET --zip-file fileb://lambda.zip
+          else
+            echo "Function $LAMBDA_FUNCTION_GET not found, creating it..."
+            aws lambda create-function --function-name $LAMBDA_FUNCTION_GET \
+              --runtime python3.8 \
+              --role arn:aws:iam::135808949659:role/LambdaExecutionRole \
+              --handler get_students.lambda_handler \
+              --zip-file fileb://lambda.zip
+          fi
 
       - name: Deploy Flask Frontend to S3
         env:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-        run: aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
+        run: |
+          echo "Deploying frontend to S3 bucket: $S3_BUCKET_NAME"
+          aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
 
       - name: Invalidate CloudFront Cache (Optional)
         env:
           CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
-          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*" || echo "Skipping CloudFront invalidation"
+          if [ -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+            echo "CloudFront Distribution ID not set, skipping invalidation."
+          else
+            echo "Invalidating CloudFront cache for $CLOUDFRONT_DISTRIBUTION_ID"
+            aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+          fi
