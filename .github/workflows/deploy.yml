@@ -92,10 +92,11 @@ jobs:
           echo "Lambda Get Students API: ${{ env.GET_STUDENTS_URL }}" >> deployment_status.md
 
       - name: Upload Status as Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: deployment-status
           path: deployment_status.md
+          retention-days: 5
 
       - name: Invalidate CloudFront Cache (Optional)
         if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
