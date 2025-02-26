@@ -17,9 +17,10 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install AWS CLI and Dependencies
+      - name: Install Dependencies
         run: |
-          pip install awscli
+          python -m pip install --upgrade pip
+          pip install boto3==1.26.137 botocore==1.29.137 awscli==1.27.137
           pip install -r backend/lambda_functions/requirements.txt
 
       - name: Configure AWS Credentials
@@ -36,13 +37,17 @@ jobs:
           LAMBDA_EXECUTION_ROLE: arn:aws:iam::135808949659:role/LambdaExecutionRole
         run: |
           cd backend/lambda_functions
-          zip -r ../../lambda.zip .
+          zip -r ../../lambda.zip ./*
           cd ../../
 
           for function in $LAMBDA_FUNCTION_ADD $LAMBDA_FUNCTION_GET; do
-            if aws lambda get-function --function-name $function; then
-              aws lambda update-function-code --function-name $function --zip-file fileb://lambda.zip
+            if aws lambda get-function --function-name $function 2>/dev/null; then
+              echo "Updating function: $function"
+              aws lambda update-function-code \
+                --function-name $function \
+                --zip-file fileb://lambda.zip
             else
+              echo "Creating function: $function"
               aws lambda create-function \
                 --function-name $function \
                 --runtime python3.9 \
