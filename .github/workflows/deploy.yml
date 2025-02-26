@@ -24,10 +24,11 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ap-south-1
         run: |
-          zip -r lambda.zip backend/lambda_functions/*
-          aws lambda update-function-code --function-name add_student --zip-file fileb://lambda.zip
-          aws lambda update-function-code --function-name get_students --zip-file fileb://lambda.zip
+          aws configure set region $AWS_REGION
+          aws lambda update-function-code --function-name add_student --zip-file fileb://lambda.zip --region $AWS_REGION
+          aws lambda update-function-code --function-name get_students --zip-file fileb://lambda.zip --region $AWS_REGION
 
       - name: Deploy Flask App to S3
         run: aws s3 sync frontend/ s3://testingcrud/
