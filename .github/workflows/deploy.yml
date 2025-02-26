@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
-          python-version: '3.8'
+          python-version: '3.9'
 
       - name: Install Dependencies
         run: pip install -r backend/lambda_functions/requirements.txt
@@ -53,7 +53,7 @@ jobs:
               echo "Creating new function $function"
               aws lambda create-function \
                 --function-name $function \
-                --runtime python3.8 \
+                --runtime python3.9 \
                 --role $LAMBDA_EXECUTION_ROLE \
                 --handler lambda_function.lambda_handler \
                 --zip-file fileb://lambda.zip
@@ -65,14 +65,20 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
         run: aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
 
-      - name: Create Elastic Beanstalk Application
+      - name: Generate Deployment Package
         run: |
-          eb init student-app --platform python-3.8 --region ${{ secrets.AWS_REGION }}
-          if ! eb status student-env 2>/dev/null; then
-            eb create student-env --instance-types t2.micro
-          else
-            eb deploy student-env
-          fi
+          zip -r deploy.zip . -x '*.git*'
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v20
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: student-app
+          environment_name: student-env
+          version_label: v1-${{ github.sha }}
+          region: ${{ secrets.AWS_REGION }}
+          deployment_package: deploy.zip
 
       - name: Get Application URL
         id: get_url
@@ -92,7 +98,7 @@ jobs:
           echo "Lambda Get Students API: ${{ env.GET_STUDENTS_URL }}" >> deployment_status.md
 
       - name: Upload Status as Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: deployment-status
           path: deployment_status.md
