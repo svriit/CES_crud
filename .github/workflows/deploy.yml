@@ -1,4 +1,4 @@
-name: Deploy Student CRUD App
+name: Deploy Student CRUD Application
 
 on:
   push:
@@ -12,17 +12,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v2
 
-      - name: Set up Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.9'
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install boto3==1.26.137 botocore==1.29.137 awscli==1.27.137
-          pip install -r backend/lambda_functions/requirements.txt
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -31,79 +20,77 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Deploy Lambda Functions
-        env:
-          LAMBDA_FUNCTION_ADD: ${{ secrets.LAMBDA_FUNCTION_ADD }}
-          LAMBDA_FUNCTION_GET: ${{ secrets.LAMBDA_FUNCTION_GET }}
-          LAMBDA_EXECUTION_ROLE: arn:aws:iam::135808949659:role/LambdaExecutionRole
         run: |
+          # Zip and deploy add_student function
           cd backend/lambda_functions
-          zip -r ../../lambda.zip ./*
-          cd ../../
+          zip -r ../../add_student.zip add_student.py
+          cd ../..
+          aws lambda update-function-code \
+            --function-name add_student \
+            --zip-file fileb://add_student.zip
 
-          for function in $LAMBDA_FUNCTION_ADD $LAMBDA_FUNCTION_GET; do
-            if aws lambda get-function --function-name $function 2>/dev/null; then
-              echo "Updating function: $function"
-              aws lambda update-function-code \
-                --function-name $function \
-                --zip-file fileb://lambda.zip
-            else
-              echo "Creating function: $function"
-              aws lambda create-function \
-                --function-name $function \
-                --runtime python3.9 \
-                --role $LAMBDA_EXECUTION_ROLE \
-                --handler lambda_function.lambda_handler \
-                --zip-file fileb://lambda.zip
-            fi
-          done
+          # Zip and deploy get_students function
+          cd backend/lambda_functions
+          zip -r ../../get_students.zip get_students.py
+          cd ../..
+          aws lambda update-function-code \
+            --function-name get_students \
+            --zip-file fileb://get_students.zip
 
-      - name: Deploy Frontend to S3
-        env:
-          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+      - name: Deploy Static Website
         run: |
-          aws s3 sync frontend/ s3://$S3_BUCKET_NAME --delete
-          
-          # Set bucket for static website hosting
-          aws s3 website s3://$S3_BUCKET_NAME --index-document index.html
+          # Copy index.html to S3
+          aws s3 cp index.html s3://${{ secrets.S3_BUCKET_NAME }}/index.html
 
-          # Make bucket public
-          aws s3api put-bucket-policy --bucket $S3_BUCKET_NAME --policy '{
-            "Version": "2012-10-17",
-            "Statement": [
+          # Set bucket website configuration
+          aws s3 website s3://${{ secrets.S3_BUCKET_NAME }} \
+            --index-document index.html
+
+          # Update bucket policy for public access
+          aws s3api put-bucket-policy \
+            --bucket ${{ secrets.S3_BUCKET_NAME }} \
+            --policy '{
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "PublicReadGetObject",
+                  "Effect": "Allow",
+                  "Principal": "*",
+                  "Action": "s3:GetObject",
+                  "Resource": "arn:aws:s3:::'${{ secrets.S3_BUCKET_NAME }}'/*"
+                }
+              ]
+            }'
+
+      - name: Set CORS for API Gateway
+        run: |
+          aws apigateway update-cors --rest-api-id b31i1zxvcd \
+            --resource-id /* \
+            --patch-operations '[
               {
-                "Sid": "PublicReadGetObject",
-                "Effect": "Allow",
-                "Principal": "*",
-                "Action": "s3:GetObject",
-                "Resource": "arn:aws:s3:::'$S3_BUCKET_NAME'/*"
+                "op": "replace",
+                "path": "/corsConfiguration",
+                "value": "{\"allowOrigins\": [\"*\"],\"allowMethods\": [\"GET\",\"POST\"],\"allowHeaders\": [\"Content-Type\"]}"
               }
-            ]
-          }'
+            ]'
 
-      - name: Get Deployment URLs
-        id: get_urls
+      - name: Print Deployment URLs
         run: |
-          echo "Frontend URL: http://${{ secrets.S3_BUCKET_NAME }}.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
+          echo "Website URL: http://${{ secrets.S3_BUCKET_NAME }}.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
           echo "Add Student API: https://b31i1zxvcd.execute-api.ap-south-1.amazonaws.com/prod/students"
           echo "Get Students API: https://fabj02e95h.execute-api.ap-south-1.amazonaws.com/prod/students"
 
-      - name: Create Status File
+      - name: Create Deployment Summary
         run: |
-          echo "# Deployment Status" > deployment_status.md
-          echo "Frontend URL: http://${{ secrets.S3_BUCKET_NAME }}.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com" >> deployment_status.md
-          echo "Add Student API: https://b31i1zxvcd.execute-api.ap-south-1.amazonaws.com/prod/students" >> deployment_status.md
-          echo "Get Students API: https://fabj02e95h.execute-api.ap-south-1.amazonaws.com/prod/students" >> deployment_status.md
+          echo "# Deployment Summary" > deployment.md
+          echo "## URLs" >> deployment.md
+          echo "- Website: http://${{ secrets.S3_BUCKET_NAME }}.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com" >> deployment.md
+          echo "- Add Student API: https://b31i1zxvcd.execute-api.ap-south-1.amazonaws.com/prod/students" >> deployment.md
+          echo "- Get Students API: https://fabj02e95h.execute-api.ap-south-1.amazonaws.com/prod/students" >> deployment.md
 
-      - name: Upload Status as Artifact
+      - name: Upload Deployment Summary
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-status
-          path: deployment_status.md
+          name: deployment-info
+          path: deployment.md
           retention-days: 5
-
-      - name: Invalidate CloudFront Cache (Optional)
-        if: env.CLOUDFRONT_DISTRIBUTION_ID != ''
-        env:
-          CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
-        run: |
-          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*" || echo "Skipping CloudFront invalidation"
