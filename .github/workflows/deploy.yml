@@ -92,7 +92,7 @@ jobs:
           echo "Lambda Get Students API: ${{ env.GET_STUDENTS_URL }}" >> deployment_status.md
 
       - name: Upload Status as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: deployment-status
           path: deployment_status.md
