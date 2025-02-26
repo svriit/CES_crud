@@ -29,18 +29,51 @@ jobs:
           mv lambda.zip ../
           cd ..
 
-      - name: Debug file structure (Check if ZIP exists)
-        run: ls -lah lambda.zip
-
-      - name: Deploy to AWS Lambda
+      - name: Configure AWS Credentials
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ap-south-1
         run: |
           aws configure set region $AWS_REGION
-          aws lambda update-function-code --function-name add_student --zip-file fileb://lambda.zip --region $AWS_REGION
-          aws lambda update-function-code --function-name get_students --zip-file fileb://lambda.zip --region $AWS_REGION
+
+      - name: Deploy Lambda Functions
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ap-south-1
+        run: |
+          # Create or update add_student function
+          if ! aws lambda get-function --function-name add_student --region $AWS_REGION &>/dev/null; then
+            aws lambda create-function \
+              --function-name add_student \
+              --runtime python3.8 \
+              --handler add_student.lambda_handler \
+              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-basic-execution \
+              --zip-file fileb://lambda.zip \
+              --region $AWS_REGION
+          else
+            aws lambda update-function-code \
+              --function-name add_student \
+              --zip-file fileb://lambda.zip \
+              --region $AWS_REGION
+          fi
+
+          # Create or update get_students function
+          if ! aws lambda get-function --function-name get_students --region $AWS_REGION &>/dev/null; then
+            aws lambda create-function \
+              --function-name get_students \
+              --runtime python3.8 \
+              --handler get_students.lambda_handler \
+              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-basic-execution \
+              --zip-file fileb://lambda.zip \
+              --region $AWS_REGION
+          else
+            aws lambda update-function-code \
+              --function-name get_students \
+              --zip-file fileb://lambda.zip \
+              --region $AWS_REGION
+          fi
 
       - name: Deploy Flask App to S3
         run: aws s3 sync frontend/ s3://testingcrud/
