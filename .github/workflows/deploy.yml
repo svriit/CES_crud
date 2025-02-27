@@ -78,18 +78,6 @@ jobs:
               ]
             }'
 
-      - name: Set CORS for API Gateway
-        run: |
-          aws apigateway update-cors --rest-api-id b31i1zxvcd \
-            --resource-id /* \
-            --patch-operations '[
-              {
-                "op": "replace",
-                "path": "/corsConfiguration",
-                "value": "{\"allowOrigins\": [\"*\"],\"allowMethods\": [\"GET\",\"POST\"],\"allowHeaders\": [\"Content-Type\"]}"
-              }
-            ]'
-
       - name: Print Deployment URLs
         run: |
           echo "Website URL: http://${{ secrets.S3_BUCKET_NAME }}.s3-website-${{ secrets.AWS_REGION }}.amazonaws.com"
